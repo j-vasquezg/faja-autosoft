@@ -206,8 +206,10 @@
     servo3: PREFIJO + "/comando/servo3",
   };
 
-  // Broker publico HiveMQ via WebSocket
-  const MQTT_URL = "ws://broker.hivemq.com:8000/mqtt";
+  // Broker publico HiveMQ via WebSocket seguro (wss) - necesario porque la
+  // pagina se sirve por HTTPS (GitHub Pages) y los navegadores bloquean
+  // conexiones ws:// sin cifrar desde paginas https
+  const MQTT_URL = "wss://broker.hivemq.com:8884/mqtt";
 
   const client = mqtt.connect(MQTT_URL, {
     clientId: "faja_autosoft_app_" + Math.random().toString(16).slice(2, 8),
