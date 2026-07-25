@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Faja Autosoft - Dashboard</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0891B2">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #0D1B2A; color: #E2EDF7; min-height: 100vh; padding-bottom: 30px;
+  }
+  .header {
+    background: #1B3A5C; padding: 16px 20px; text-align: center;
+    position: sticky; top: 0; z-index: 10; border-bottom: 2px solid #0891B2;
+  }
+  .header h1 { font-size: 18px; color: #22D3EE; margin-bottom: 2px; }
+  .header p { font-size: 11px; color: #94A3B8; }
+  .conexion {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
+    font-size: 11px; padding: 4px 10px; border-radius: 20px; background: #0D1B2A;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #EF4444; }
+  .dot.ok { background: #10B981; }
+
+  .container { max-width: 480px; margin: 0 auto; padding: 16px; }
+
+  .sensor-card {
+    background: #1B3A5C; border-radius: 12px; padding: 16px; margin-bottom: 14px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sensor-card .label { font-size: 13px; color: #94A3B8; }
+  .sensor-badge {
+    padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 13px;
+    background: #334155; color: #94A3B8; transition: all .2s;
+  }
+  .sensor-badge.detectando { background: #F59E0B; color: #1a1a1a; }
+  .sensor-badge.libre { background: #10B981; color: white; }
+
+  .stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;
+  }
+  .zona-card {
+    border-radius: 12px; padding: 14px; text-align: center; position: relative; overflow: hidden;
+  }
+  .zona-card .nombre { font-size: 12px; opacity: .85; font-weight: bold; letter-spacing: .5px; }
+  .zona-card .numero { font-size: 30px; font-weight: bold; margin-top: 4px; }
+  .zona-norte { background: linear-gradient(135deg,#0891B2,#0e7490); }
+  .zona-sur { background: linear-gradient(135deg,#10B981,#059669); }
+  .zona-este { background: linear-gradient(135deg,#F59E0B,#d97706); color:#1a1a1a; }
+  .zona-oeste { background: linear-gradient(135deg,#7C3AED,#6d28d9); }
+
+  .resumen-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .resumen-card { background: #1B3A5C; border-radius: 12px; padding: 16px; text-align: center; }
+  .resumen-card .valor { font-size: 28px; font-weight: bold; color: #22D3EE; }
+  .resumen-card .etiqueta { font-size: 11px; color: #94A3B8; margin-top: 4px; }
+
+  .seccion-titulo {
+    font-size: 13px; font-weight: bold; color: #94A3B8; margin: 18px 0 10px;
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+
+  .test-btn {
+    width: 100%; padding: 14px; margin-bottom: 10px; border: none; border-radius: 10px;
+    background: #1B3A5C; color: white; font-size: 14px; font-weight: bold;
+    display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+    border-left: 4px solid #0891B2;
+  }
+  .test-btn.sur { border-left-color: #10B981; }
+  .test-btn.este { border-left-color: #F59E0B; }
+  .test-btn:active { background: #132337; }
+  .test-btn .estado-servo { font-size: 11px; color: #64748B; font-weight: normal; }
+  .test-btn .estado-servo.probando { color: #F59E0B; font-weight: bold; }
+
+  .historial-lista { background: #1B3A5C; border-radius: 12px; padding: 8px; max-height: 280px; overflow-y: auto; }
+  .historial-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px; border-bottom: 1px solid #132337; font-size: 13px;
+  }
+  .historial-item:last-child { border-bottom: none; }
+  .historial-zona-tag {
+    font-size: 10px; font-weight: bold; padding: 3px 9px; border-radius: 6px; color: white;
+  }
+  .tag-NORTE { background: #0891B2; } .tag-SUR { background: #10B981; }
+  .tag-ESTE { background: #F59E0B; color:#1a1a1a; } .tag-OESTE { background: #7C3AED; }
+  .historial-hora { color: #64748B; font-size: 12px; }
+  .historial-vacio { color: #64748B; text-align: center; padding: 20px; font-size: 13px; }
+
+  /* Modal de advertencia */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7);
+    z-index: 100; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay.visible { display: flex; }
+  .modal-box {
+    background: #1B3A5C; border-radius: 14px; padding: 22px; max-width: 340px; width: 100%;
+    border-top: 4px solid #F59E0B;
+  }
+  .modal-box .icono { font-size: 32px; text-align: center; margin-bottom: 8px; }
+  .modal-box h3 { font-size: 16px; color: #F59E0B; text-align: center; margin-bottom: 10px; }
+  .modal-box p { font-size: 13px; color: #CBD5E1; text-align: center; line-height: 1.5; margin-bottom: 18px; }
+  .modal-botones { display: flex; gap: 10px; }
+  .modal-botones button {
+    flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer;
+  }
+  .btn-cancelar { background: #334155; color: #E2EDF7; }
+  .btn-confirmar { background: #F59E0B; color: #1a1a1a; }
+
+  .ip-note { font-size: 10px; color: #475569; text-align: center; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>FAJA AUTOSOFT</h1>
+    <p>Dashboard de Monitoreo - Courier Shalom</p>
+    <div class="conexion">
+      <span class="dot" id="dotConexion"></span>
+      <span id="textoConexion">Conectando...</span>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <div class="sensor-card">
+      <span class="label">Estado del sensor</span>
+      <span class="sensor-badge" id="badgeSensor">Sin datos</span>
+    </div>
+
+    <div class="stats-grid">
+      <div class="zona-card zona-norte">
+        <div class="nombre">NORTE</div>
+        <div class="numero" id="numNorte">0</div>
+      </div>
+      <div class="zona-card zona-sur">
+        <div class="nombre">SUR</div>
+        <div class="numero" id="numSur">0</div>
+      </div>
+      <div class="zona-card zona-este">
+        <div class="nombre">ESTE</div>
+        <div class="numero" id="numEste">0</div>
+      </div>
+      <div class="zona-card zona-oeste">
+        <div class="nombre">OESTE</div>
+        <div class="numero" id="numOeste">0</div>
+      </div>
+    </div>
+
+    <div class="resumen-grid">
+      <div class="resumen-card">
+        <div class="valor" id="numTotal">0</div>
+        <div class="etiqueta">Total clasificado</div>
+      </div>
+      <div class="resumen-card">
+        <div class="valor" id="numCajasMin">0</div>
+        <div class="etiqueta">Cajas / minuto</div>
+      </div>
+    </div>
+
+    <div class="seccion-titulo">Pruebas de servomotores</div>
+
+    <button class="test-btn norte" onclick="abrirModalPrueba('servo1','Norte')">
+      Probar Servo Norte <span class="estado-servo" id="estadoServo1">listo</span>
+    </button>
+    <button class="test-btn sur" onclick="abrirModalPrueba('servo2','Sur')">
+      Probar Servo Sur <span class="estado-servo" id="estadoServo2">listo</span>
+    </button>
+    <button class="test-btn este" onclick="abrirModalPrueba('servo3','Este')">
+      Probar Servo Este <span class="estado-servo" id="estadoServo3">listo</span>
+    </button>
+
+    <div class="seccion-titulo">Historial de paquetes</div>
+    <div class="historial-lista" id="listaHistorial">
+      <div class="historial-vacio">Aún no se ha clasificado ningún paquete.</div>
+    </div>
+
+    <p class="ip-note">Conectado a broker.hivemq.com &middot; faja_autosoft_idat2026</p>
+  </div>
+
+  <!-- Modal de advertencia -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-box">
+      <div class="icono">⚠️</div>
+      <h3>Advertencia</h3>
+      <p id="modalTexto">Estás por activar manualmente un servomotor.</p>
+      <div class="modal-botones">
+        <button class="btn-cancelar" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn-confirmar" onclick="confirmarPrueba()">Confirmar y probar</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ================== CONFIGURACION MQTT ==================
+  const PREFIJO = "faja_autosoft_idat2026";
+  const TOPIC_ESTADO = PREFIJO + "/estado";
+  const TOPIC_HISTORIAL = PREFIJO + "/historial";
+  const TOPIC_CMD = {
+    servo1: PREFIJO + "/comando/servo1",
+    servo2: PREFIJO + "/comando/servo2",
+    servo3: PREFIJO + "/comando/servo3",
+  };
+
+  // Broker publico HiveMQ via WebSocket
+  const MQTT_URL = "ws://broker.hivemq.com:8000/mqtt";
+
+  const client = mqtt.connect(MQTT_URL, {
+    clientId: "faja_autosoft_app_" + Math.random().toString(16).slice(2, 8),
+    clean: true,
+    reconnectPeriod: 3000,
+  });
+
+  const dot = document.getElementById("dotConexion");
+  const textoConexion = document.getElementById("textoConexion");
+
+  client.on("connect", () => {
+    dot.classList.add("ok");
+    textoConexion.textContent = "Conectado";
+    client.subscribe(TOPIC_ESTADO);
+    client.subscribe(TOPIC_HISTORIAL);
+  });
+
+  client.on("reconnect", () => {
+    dot.classList.remove("ok");
+    textoConexion.textContent = "Reconectando...";
+  });
+
+  client.on("close", () => {
+    dot.classList.remove("ok");
+    textoConexion.textContent = "Desconectado";
+  });
+
+  client.on("message", (topic, payloadBuf) => {
+    let data;
+    try {
+      data = JSON.parse(payloadBuf.toString());
+    } catch (e) {
+      return;
+    }
+    if (topic === TOPIC_ESTADO) actualizarEstado(data);
+    if (topic === TOPIC_HISTORIAL) agregarHistorial(data);
+  });
+
+  // ================== ACTUALIZAR DASHBOARD ==================
+  function actualizarEstado(d) {
+    const badge = document.getElementById("badgeSensor");
+    badge.classList.remove("detectando", "libre");
+    if (d.sensor === "detectando") {
+      badge.textContent = "Detectando paquete";
+      badge.classList.add("detectando");
+    } else {
+      badge.textContent = "Libre";
+      badge.classList.add("libre");
+    }
+
+    document.getElementById("numNorte").textContent = d.norte ?? 0;
+    document.getElementById("numSur").textContent = d.sur ?? 0;
+    document.getElementById("numEste").textContent = d.este ?? 0;
+    document.getElementById("numOeste").textContent = d.oeste ?? 0;
+    document.getElementById("numTotal").textContent = d.total ?? 0;
+    document.getElementById("numCajasMin").textContent = d.cajas_min ?? 0;
+  }
+
+  function agregarHistorial(d) {
+    const lista = document.getElementById("listaHistorial");
+    const vacio = lista.querySelector(".historial-vacio");
+    if (vacio) vacio.remove();
+
+    const item = document.createElement("div");
+    item.className = "historial-item";
+    const horaTexto = new Date().toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    item.innerHTML = `
+      <span class="historial-zona-tag tag-${d.zona}">${d.zona}</span>
+      <span class="historial-hora">${horaTexto}</span>
+    `;
+    lista.prepend(item);
+
+    // Limitar a 30 registros visibles
+    const items = lista.querySelectorAll(".historial-item");
+    if (items.length > 30) items[items.length - 1].remove();
+  }
+
+  // ================== PRUEBA DE SERVOS (con confirmacion) ==================
+  let servoSeleccionado = null;
+  const nombresServo = { servo1: "Norte", servo2: "Sur", servo3: "Este" };
+
+  function abrirModalPrueba(idServo, nombreZona) {
+    servoSeleccionado = idServo;
+    document.getElementById("modalTexto").textContent =
+      `Estás por activar manualmente el Servo ${nombreZona}. Asegúrate de que no haya obstrucciones ni personas cerca del mecanismo.`;
+    document.getElementById("modalOverlay").classList.add("visible");
+  }
+
+  function cerrarModal() {
+    document.getElementById("modalOverlay").classList.remove("visible");
+    servoSeleccionado = null;
+  }
+
+  function confirmarPrueba() {
+    if (!servoSeleccionado) return;
+    const topic = TOPIC_CMD[servoSeleccionado];
+    client.publish(topic, "test");
+
+    const estadoEl = document.getElementById("estado" + capitalizar(servoSeleccionado));
+    estadoEl.textContent = "probando...";
+    estadoEl.classList.add("probando");
+
+    setTimeout(() => {
+      estadoEl.textContent = "listo";
+      estadoEl.classList.remove("probando");
+    }, 2000);
+
+    cerrarModal();
+  }
+
+  function capitalizar(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+</script>
+
+</body>
+</html>
