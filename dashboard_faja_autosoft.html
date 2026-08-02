@@ -30,18 +30,6 @@
 
   .container { max-width: 480px; margin: 0 auto; padding: 16px; }
 
-  .sensor-card {
-    background: #1B3A5C; border-radius: 12px; padding: 16px; margin-bottom: 14px;
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .sensor-card .label { font-size: 13px; color: #94A3B8; }
-  .sensor-badge {
-    padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 13px;
-    background: #334155; color: #94A3B8; transition: all .2s;
-  }
-  .sensor-badge.detectando { background: #F59E0B; color: #1a1a1a; }
-  .sensor-badge.libre { background: #10B981; color: white; }
-
   .stats-grid {
     display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;
   }
@@ -126,11 +114,6 @@
   </div>
 
   <div class="container">
-
-    <div class="sensor-card">
-      <span class="label">Estado del sensor</span>
-      <span class="sensor-badge" id="badgeSensor">Sin datos</span>
-    </div>
 
     <div class="stats-grid">
       <div class="zona-card zona-norte">
@@ -250,16 +233,6 @@
 
   // ================== ACTUALIZAR DASHBOARD ==================
   function actualizarEstado(d) {
-    const badge = document.getElementById("badgeSensor");
-    badge.classList.remove("detectando", "libre");
-    if (d.sensor === "detectando") {
-      badge.textContent = "Detectando paquete";
-      badge.classList.add("detectando");
-    } else {
-      badge.textContent = "Libre";
-      badge.classList.add("libre");
-    }
-
     document.getElementById("numNorte").textContent = d.norte ?? 0;
     document.getElementById("numSur").textContent = d.sur ?? 0;
     document.getElementById("numEste").textContent = d.este ?? 0;
